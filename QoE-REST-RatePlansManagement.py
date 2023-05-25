@@ -9,7 +9,7 @@ from optparse import OptionParser
 
 
 
-## Supress HTTPS Insecure Request warning 
+## Supress HTTPS Insecure Request warning
 requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
 
 ######################################################################
@@ -79,7 +79,7 @@ def addPolicy(policyName, downlinkRate, uplinkRate, policyId, acm):
         json_data['rateLimitDownlink'] = {
             'congestionMgmt': acm,
         }
-   
+
     if(uplinkRate > 0):
         json_data['rateLimitUplink'] = {
             'rate': uplinkRate,
@@ -94,7 +94,7 @@ def addPolicy(policyName, downlinkRate, uplinkRate, policyId, acm):
     return 0
 
 
-def retrievPolicy(policyName):     
+def retrievPolicy(policyName):
     ### Retrieve Policies
     if(policyName == ""):
         print("Retrieving All Policies")
@@ -105,7 +105,7 @@ def retrievPolicy(policyName):
         'Content-Type': 'application/json',
     }
     response = requests.get(URL_PREFIX + 'policies/rate/' + policyName, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
-        
+
     if(processGetResponse(response) >= 400):
         #print ("Error retrieving rate policy details\n")
         return -1
@@ -157,7 +157,7 @@ def assignSubscriberToRatePolicy(subscriber, subscriberId, policyName):
     if(processPostResponse(response) >= 400):
         #print("Error assiging Policy to the subscriber\n")
         return -1
-    
+
     return 0
 
 
@@ -168,7 +168,7 @@ def retrieveSubscriberRatePolicy(subscriber):
         print("Retrieving All subscribers policies")
     else:
         print("Retrieving Subscriber {:s} Policy: ".format(subscriber))
-        
+
     headers = {
         'Content-Type': 'application/json',
     }
@@ -177,7 +177,7 @@ def retrieveSubscriberRatePolicy(subscriber):
     if(processGetResponse(response) >= 400):
         print("Error retrieving subscriber rate policy\n")
         return -1
-    
+
     return 0
 
 
@@ -197,7 +197,7 @@ def deleteSubscriberRatePolicy(subscriber):
 
 def deleteSubscriberRatePolicyBySubID(subscriberId):
     ##### Delete the assignment of a subscriber to a policy:
-    
+
     headers = {
         'Content-Type': 'application/json',
     }
@@ -226,7 +226,7 @@ def retrievSubscriberMetrics(subscriber, metric, interval, period):
         'interval': interval,
         'period': period,
     }
-    
+
     response = requests.get(URL_PREFIX + 'subscribers/' + subscriber +'/' + metric, params=params, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
     if(processGetResponse(response) >= 400):
         #print("Error retrieving subscriber metrics\n")
@@ -251,7 +251,7 @@ def retrievSubscriberMetrics(subscriber, metric, interval, period):
 ######################################################################
 
 ######################################
-##### Adding Policy 
+##### Adding Policy
 ######################################
 
 def displayAddPolicyUsage():
@@ -266,19 +266,19 @@ def addPolicyFromCLI(args):
         print("Missing policyName")
         displayAddPolicyUsage()
         return -1
-    
+
     if args.policyId is None:
         print("Missing policyId")
         displayAddPolicyUsage()
         return -1
-    
+
     if args.downlinkRate is None:
         args.downlinkRate = -1
 
     if args.uplinkRate is None:
         args.uplinkRate = -1
 
-    
+
     acm = False
     if args.acm is None:
         acm = False
@@ -291,12 +291,12 @@ def addPolicyFromCLI(args):
         displayAddPolicyUsage()
         return -1
 
-  
+
     return addPolicy(args.policyName, args.downlinkRate, args.uplinkRate, args.policyId, acm)
 
 
 ######################################
-##### Retrieving Policy 
+##### Retrieving Policy
 ######################################
 
 def getPolicyFromCLI(args):
@@ -305,9 +305,9 @@ def getPolicyFromCLI(args):
         return retrievPolicy("")
     else:
         return retrievPolicy(args.policyName)
-    
+
 ######################################
-##### Delete Policy 
+##### Delete Policy
 ######################################
 
 def displaydeletePolicyUsage():
@@ -325,10 +325,10 @@ def deletePolicyFromCLI(args):
         print("Missing PolicyName or PolicyId")
         displaydeletePolicyUsage()
         return -1
-     
+
 
 ######################################
-##### Retrieving Subscriber's Policy 
+##### Retrieving Subscriber's Policy
 ######################################
 def displaySetSubRatePolicyUsage():
     print("\nUsage:")
@@ -353,7 +353,7 @@ def setSubRatePolicyFromCLI(args):
     return assignSubscriberToRatePolicy(args.subscriber, args.subscriberId, args.policyName)
 
 ######################################
-##### Retrieving Subscriber's Policy 
+##### Retrieving Subscriber's Policy
 ######################################
 def displaygetSubRatePolicyUsage():
     print("\nUsage:")
@@ -369,7 +369,7 @@ def getSubRatePolicyFromCLI(args):
         return retrieveSubscriberRatePolicy(args.subscriber)
 
 ######################################
-##### Delete Subscriber's Policy 
+##### Delete Subscriber's Policy
 ######################################
 def displayDeleteSubRatePolicyUsage():
     print("\nUsage:")
@@ -387,12 +387,12 @@ def deleteSubRatePolicyFromCLI(args):
         print("Missing subscriber")
         displayDeleteSubRatePolicyUsage()
         return -1
-    
-    
+
+
 
 
 ######################################
-##### Retrieving Subscriber's Stats 
+##### Retrieving Subscriber's Stats
 ######################################
 
 def displaygetSubMetricsUsage():
@@ -418,7 +418,7 @@ def getSubMetricsFromCLI(args):
     if args.metric not in ["bandwidth","flows", "latency", "retransmission", "volume"]:
         print("Unknown metric type")
         displaygetSubMetricsUsage()
-        return -1        
+        return -1
 
     if args.metric_interval is None:
         args.metric_interval = 60
@@ -437,7 +437,7 @@ def getSubMetricsFromCLI(args):
 
 
 def main():
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument("action", help="Action to be performed: addPolicy|getPolicy|deletePolicy|setSubRatePolicy|getSubRatePolicy|deleteSubRatePolicy|getSubMetrics")
     parser.add_argument("-p", "--policyName", help="Policy Name, no spaces or special characters")
@@ -450,16 +450,16 @@ def main():
     parser.add_argument("-m", "--metric", help="subscriber metric to retrieve: bandwidth|flows|latency|retransmission|volume")
     parser.add_argument("-mi", "--metric_interval", type=int, help="subscriber metric time interval in minutes (default 60 minutes)")
     parser.add_argument("-mp", "--metric_period", type=int, help="subscriber metric ime period in hours (default: 24 hours). The maximum query period is 3 months")
- 
+
     args = parser.parse_args()
 
     match args.action.lower():
         case "addpolicy":
             return addPolicyFromCLI(args)
         case "getpolicy":
-            return getPolicyFromCLI(args)    
+            return getPolicyFromCLI(args)
         case "deletepolicy":
-            return deletePolicyFromCLI(args)    
+            return deletePolicyFromCLI(args)
         case "setsubratepolicy":
             return setSubRatePolicyFromCLI(args)
         case "getsubratepolicy":
