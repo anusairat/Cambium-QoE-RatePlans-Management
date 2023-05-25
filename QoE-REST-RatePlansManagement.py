@@ -4,6 +4,7 @@
 import json
 import requests
 import os
+import sys
 import argparse
 from optparse import OptionParser
 
@@ -41,6 +42,8 @@ URL_PREFIX = "https://" + QoE_MNG_IP + ":" + QoE_REST_PORT + REST_API_END_POINT
 ################                                        ##############
 ######################################################################
 
+def print_stderr(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
 
 def processPostResponse(response):
     if("Content-Length" in response.headers and int(response.headers["Content-Length"]) > 0):
@@ -60,7 +63,7 @@ def processGetResponse(response):
 
 def addPolicy(policyName, downlinkRate, uplinkRate, policyId, acm):
     #### Add new Policy
-    #print("Adding new Policy ==>  Name: {:s} Id: {:s} DL Rate(kbps): {:d} UL Rate (kbps): {:d}  ACM: {:s}".format(policyName, policyId, downlinkRate, uplinkRate, str(acm)))
+    print_stderr("Adding new Policy ==>  Name: {:s} Id: {:s} DL Rate(kbps): {:d} UL Rate (kbps): {:d}  ACM: {:s}".format(policyName, policyId, downlinkRate, uplinkRate, str(acm)))
     headers = {
         # Already added when you pass json= but not when you pass data=
         # 'Content-Type': 'application/json',
@@ -88,7 +91,7 @@ def addPolicy(policyName, downlinkRate, uplinkRate, policyId, acm):
 
     response = requests.post(URL_PREFIX + 'policies/rate/' + policyName, headers=headers, json=json_data, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
     if(processPostResponse(response) >= 400):
-        #print ("Error adding subscriber rate policy\n")
+        #print_stderr ("Error adding subscriber rate policy\n")
         return -1
 
     return 0
@@ -97,9 +100,9 @@ def addPolicy(policyName, downlinkRate, uplinkRate, policyId, acm):
 def retrievPolicy(policyName):
     ### Retrieve Policies
     if(policyName == ""):
-        print("Retrieving All Policies")
+        print_stderr("Retrieving All Policies")
     else:
-        print("Retrieving Policy: ", policyName)
+        print_stderr("Retrieving Policy: ", policyName)
 
     headers = {
         'Content-Type': 'application/json',
@@ -107,7 +110,7 @@ def retrievPolicy(policyName):
     response = requests.get(URL_PREFIX + 'policies/rate/' + policyName, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
 
     if(processGetResponse(response) >= 400):
-        #print ("Error retrieving rate policy details\n")
+        #print_stderr ("Error retrieving rate policy details\n")
         return -1
     else:
         return 0
@@ -118,7 +121,7 @@ def deletePolicyByName(policyName):
     headers = {
         'Content-Type': 'application/json',
     }
-    print("Deleting Policy: ", policyName)
+    print_stderr("Deleting Policy: ", policyName)
     response = requests.delete(URL_PREFIX + 'policies/rate/' + policyName, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
     if(processDeleteResponse(response) >= 400):
         #print("Error deleting policy\n")
@@ -134,17 +137,17 @@ def deletePolicyById(policyId):
         'policyId': policyId,
     }
 
-    print("Deleting Policies with Id: ", policyId)
+    print_stderr("Deleting Policies with Id: ", policyId)
     response = requests.delete(URL_PREFIX + 'policies/rate/', params=params, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
     if(processDeleteResponse(response) >= 400):
-        #print("Error deleting policies with Id  %s\n" %policyId)
+        #print_stderr("Error deleting policies with Id  %s\n" %policyId)
         return -1
     return 0
 
 
 def assignSubscriberToRatePolicy(subscriber, subscriberId, policyName):
     #### Assign Subscriber to a policy
-    print('Adding policy {:s} for subscriber {:s}'.format(policyName, subscriber))
+    print_stderr('Adding policy {:s} for subscriber {:s}'.format(policyName, subscriber))
     headers = {
         # Already added when you pass json=
         # 'Content-Type': 'application/json',
@@ -155,7 +158,7 @@ def assignSubscriberToRatePolicy(subscriber, subscriberId, policyName):
     }
     response = requests.post(URL_PREFIX + 'subscribers/' + subscriber, headers=headers, json=json_data, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
     if(processPostResponse(response) >= 400):
-        #print("Error assiging Policy to the subscriber\n")
+        #print_stderr("Error assiging Policy to the subscriber\n")
         return -1
 
     return 0
@@ -165,9 +168,9 @@ def retrieveSubscriberRatePolicy(subscriber):
 
     #### Show one subscriber (with the associated policy)
     if(subscriber == ""):
-        print("Retrieving All subscribers policies")
+        print_stderr("Retrieving All subscribers policies")
     else:
-        print("Retrieving Subscriber {:s} Policy: ".format(subscriber))
+        print_stderr("Retrieving Subscriber {:s} Policy: ".format(subscriber))
 
     headers = {
         'Content-Type': 'application/json',
@@ -175,7 +178,7 @@ def retrieveSubscriberRatePolicy(subscriber):
 
     response = requests.get(URL_PREFIX + 'subscribers/' + subscriber, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
     if(processGetResponse(response) >= 400):
-        print("Error retrieving subscriber rate policy\n")
+        print_stderr("Error retrieving subscriber rate policy\n")
         return -1
 
     return 0
@@ -187,10 +190,10 @@ def deleteSubscriberRatePolicy(subscriber):
     headers = {
         'Content-Type': 'application/json',
     }
-    print('Deleting policy for subscriber {:s}'.format(subscriber))
+    print_stderr('Deleting policy for subscriber {:s}'.format(subscriber))
     response = requests.delete(URL_PREFIX + 'subscribers/' + subscriber, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
     if(processDeleteResponse(response) >= 400):
-        #print("Error deleting subscriber rate policy\n")
+        #print_stderr("Error deleting subscriber rate policy\n")
         return -1
 
     return 0
@@ -206,17 +209,17 @@ def deleteSubscriberRatePolicyBySubID(subscriberId):
         'subscriberId': subscriberId,
     }
 
-    print('Deleting policy for subscriberId {:s}'.format(subscriberId))
+    print_stderr('Deleting policy for subscriberId {:s}'.format(subscriberId))
     response = requests.delete(URL_PREFIX + 'subscribers', headers=headers, params=params, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
     if(processDeleteResponse(response) >= 400):
-        #print("Error deleting subscriber rate policy\n")
+        #print_stderr("Error deleting subscriber rate policy\n")
         return -1
 
     return 0
 
 def retrievSubscriberMetrics(subscriber, metric, interval, period):
     #### Get the metrics of one subscriber (in this case, the bandwidth for the last five hours):
-    print('Retrieving subscriber {:s} metrics'.format(subscriber))
+    print_stderr('Retrieving subscriber {:s} metrics'.format(subscriber))
 
     headers = {
         'Content-Type': 'application/json',
@@ -229,7 +232,7 @@ def retrievSubscriberMetrics(subscriber, metric, interval, period):
 
     response = requests.get(URL_PREFIX + 'subscribers/' + subscriber +'/' + metric, params=params, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
     if(processGetResponse(response) >= 400):
-        #print("Error retrieving subscriber metrics\n")
+        #print_stderr("Error retrieving subscriber metrics\n")
         return -1
 
     return 0
@@ -255,20 +258,20 @@ def retrievSubscriberMetrics(subscriber, metric, interval, period):
 ######################################
 
 def displayAddPolicyUsage():
-    print("\nUsage:")
-    print(os.path.basename(__file__) + " addPolicy --policyName [policyname] --policyId [policyId] --downlinkRate [dlRate_kbps] --uplinkRate [ulRate_kbps] --acm [true/false]")
-    print("")
+    print_stderr("\nUsage:")
+    print_stderr(os.path.basename(__file__) + " addPolicy --policyName [policyname] --policyId [policyId] --downlinkRate [dlRate_kbps] --uplinkRate [ulRate_kbps] --acm [true/false]")
+    print_stderr("")
 
 def addPolicyFromCLI(args):
-    print("Adding Policy through CLI")
-    #print(args)
+    print_stderr("Adding Policy through CLI")
+    #print_stderr(args)
     if args.policyName is None:
-        print("Missing policyName")
+        print_stderr("Missing policyName")
         displayAddPolicyUsage()
         return -1
 
     if args.policyId is None:
-        print("Missing policyId")
+        print_stderr("Missing policyId")
         displayAddPolicyUsage()
         return -1
 
@@ -300,7 +303,7 @@ def addPolicyFromCLI(args):
 ######################################
 
 def getPolicyFromCLI(args):
-    print("Get Policy through CLI")
+    print_stderr("Get Policy through CLI")
     if args.policyName is None:
         return retrievPolicy("")
     else:
@@ -311,18 +314,18 @@ def getPolicyFromCLI(args):
 ######################################
 
 def displaydeletePolicyUsage():
-    print("\nUsage:")
-    print(os.path.basename(__file__) + " deletePolicy --policyName [policyname] OR --policyId [policyId]")
-    print("")
+    print_stderr("\nUsage:")
+    print_stderr(os.path.basename(__file__) + " deletePolicy --policyName [policyname] OR --policyId [policyId]")
+    print_stderr("")
 
 def deletePolicyFromCLI(args):
-    print("Delete Policy through CLI")
+    print_stderr("Delete Policy through CLI")
     if args.policyName is not None:
         return deletePolicyByName(args.policyName)
     elif args.policyId is not None:
         return deletePolicyById(args.policyId)
     else:
-        print("Missing PolicyName or PolicyId")
+        print_stderr("Missing PolicyName or PolicyId")
         displaydeletePolicyUsage()
         return -1
 
@@ -331,19 +334,19 @@ def deletePolicyFromCLI(args):
 ##### Retrieving Subscriber's Policy
 ######################################
 def displaySetSubRatePolicyUsage():
-    print("\nUsage:")
-    print(os.path.basename(__file__) + " setSubRatePolicy --subscriber [IPv4] --subscriberId [ID] --policyName [policyname]")
-    print("")
+    print_stderr("\nUsage:")
+    print_stderr(os.path.basename(__file__) + " setSubRatePolicy --subscriber [IPv4] --subscriberId [ID] --policyName [policyname]")
+    print_stderr("")
 
 def setSubRatePolicyFromCLI(args):
-    print("Assigning Subscriber to Policy through CLI")
-    #print(args)
+    print_stderr("Assigning Subscriber to Policy through CLI")
+    #print_stderr(args)
     if args.policyName is None:
-        print("Missing policyName")
+        print_stderr("Missing policyName")
         displaySetSubRatePolicyUsage()
         return -1
     elif args.subscriber is None:
-        print("Missing subscriber")
+        print_stderr("Missing subscriber")
         displaySetSubRatePolicyUsage()
         return -1
 
@@ -356,13 +359,13 @@ def setSubRatePolicyFromCLI(args):
 ##### Retrieving Subscriber's Policy
 ######################################
 def displaygetSubRatePolicyUsage():
-    print("\nUsage:")
-    print(os.path.basename(__file__) + " getSubRatePolicy --subscriber [IPv4] ")
-    print("")
+    print_stderr("\nUsage:")
+    print_stderr(os.path.basename(__file__) + " getSubRatePolicy --subscriber [IPv4] ")
+    print_stderr("")
 
 def getSubRatePolicyFromCLI(args):
-    #print("Retrieving Subscriber's Policy through CLI")
-    #print(args)
+    #print_stderr("Retrieving Subscriber's Policy through CLI")
+    #print_stderr(args)
     if args.subscriber is None:
         return retrieveSubscriberRatePolicy("")
     else:
@@ -372,19 +375,19 @@ def getSubRatePolicyFromCLI(args):
 ##### Delete Subscriber's Policy
 ######################################
 def displayDeleteSubRatePolicyUsage():
-    print("\nUsage:")
-    print(os.path.basename(__file__) + " deleteSubRatePolicy --subscriber [IPv4] | --subscriberId [ID]")
-    print("")
+    print_stderr("\nUsage:")
+    print_stderr(os.path.basename(__file__) + " deleteSubRatePolicy --subscriber [IPv4] | --subscriberId [ID]")
+    print_stderr("")
 
 def deleteSubRatePolicyFromCLI(args):
-    print("Deleting Subscriber's Policy through CLI")
-    #print(args)
+    print_stderr("Deleting Subscriber's Policy through CLI")
+    #print_stderr(args)
     if args.subscriber is not None:
         return deleteSubscriberRatePolicy(args.subscriber)
     elif args.subscriberId is not None:
         return deleteSubscriberRatePolicyBySubID(args.subscriberId)
     else:
-        print("Missing subscriber")
+        print_stderr("Missing subscriber")
         displayDeleteSubRatePolicyUsage()
         return -1
 
@@ -396,27 +399,27 @@ def deleteSubRatePolicyFromCLI(args):
 ######################################
 
 def displaygetSubMetricsUsage():
-    print("\nUsage:")
-    print(os.path.basename(__file__) + " getSubMetrics --subscriber [IPv4] --metric [bandwidth|flows|latency|retransmission|volume] --metric_interval [interval-minutes] --metric_period [period-hours]")
-    print("")
+    print_stderr("\nUsage:")
+    print_stderr(os.path.basename(__file__) + " getSubMetrics --subscriber [IPv4] --metric [bandwidth|flows|latency|retransmission|volume] --metric_interval [interval-minutes] --metric_period [period-hours]")
+    print_stderr("")
 
 def getSubMetricsFromCLI(args):
 
-    print("Getting subscriber metrics through CLI")
-    #print(args)
+    print_stderr("Getting subscriber metrics through CLI")
+    #print_stderr(args)
     if args.subscriber is None:
-        print("Missing subscriber")
+        print_stderr("Missing subscriber")
         displaygetSubMetricsUsage()
         return -1
     elif args.metric is None:
-        print("Missing metric type")
+        print_stderr("Missing metric type")
         displaygetSubMetricsUsage()
         return -1
 
     args.metric = args.metric.lower()
 
     if args.metric not in ["bandwidth","flows", "latency", "retransmission", "volume"]:
-        print("Unknown metric type")
+        print_stderr("Unknown metric type")
         displaygetSubMetricsUsage()
         return -1
 
@@ -469,7 +472,7 @@ def main():
         case "getsubmetrics":
             return getSubMetricsFromCLI(args)
         case default:
-            print("ERROR:: Unknow action ==> ", args.action)
+            print_stderr("ERROR:: Unknow action ==> ", args.action)
             parser.print_help()
             return -1
 
