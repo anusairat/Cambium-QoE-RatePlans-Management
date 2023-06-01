@@ -99,15 +99,17 @@ def addPolicy(policyName, downlinkRate, uplinkRate, policyId, acm):
 
 def retrievPolicy(policyName):
     ### Retrieve Policies
+    POLICY_PREFIX = 'policies/rate'
     if(policyName == ""):
         print_stderr("Retrieving All Policies")
     else:
+        POLICY_PREFIX = POLICY_PREFIX + "/"
         print_stderr("Retrieving Policy: ", policyName)
 
     headers = {
         'Content-Type': 'application/json',
     }
-    response = requests.get(URL_PREFIX + 'policies/rate/' + policyName, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
+    response = requests.get(URL_PREFIX + POLICY_PREFIX + policyName, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
 
     if(processGetResponse(response) >= 400):
         #print_stderr ("Error retrieving rate policy details\n")
@@ -166,17 +168,20 @@ def assignSubscriberToRatePolicy(subscriber, subscriberId, policyName):
 
 def retrieveSubscriberRatePolicy(subscriber):
 
-    #### Show one subscriber (with the associated policy)
+    #### Show subscriber(s) (with the associated policy)
+    SUBSCRIBER_PREFIX = 'subscribers'
+
     if(subscriber == ""):
         print_stderr("Retrieving All subscribers policies")
     else:
+        SUBSCRIBER_PREFIX = SUBSCRIBER_PREFIX + "/"
         print_stderr("Retrieving Subscriber {:s} Policy: ".format(subscriber))
 
     headers = {
         'Content-Type': 'application/json',
     }
 
-    response = requests.get(URL_PREFIX + 'subscribers/' + subscriber, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
+    response = requests.get(URL_PREFIX + SUBSCRIBER_PREFIX + subscriber, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
     if(processGetResponse(response) >= 400):
         print_stderr("Error retrieving subscriber rate policy\n")
         return -1
