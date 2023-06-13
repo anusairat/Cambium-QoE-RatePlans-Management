@@ -1,0 +1,11 @@
+Customer_Number, Customer_Name, IPv4_Address, Download_Rate_Kbps, Upload_Rate_Kbps, Qouta_Enabled, Quota_Time_Expirey, Quota_kB, Quota_Increment_kB
+2345,customer name 1,10.100.48.6,50000,10000,1,0,10000000,0
+2346,customer name 2,10.100.48.7,10000,2000,0,0,20000000,0
+2347,customer name 3,10.100.48.8,20000,4000,0,0,15000000,0
+2347,customer name 3,10.100.48.81,120000,4000,0,0,15000000,0
+2347,customer name 3,10.100.48.82,220000,4000,0,0,15000000,0
+2347,customer name 3,10.100.48.83,320000,4000,0,0,15000000,0
+2348,customer name 4,10.100.48.9,50000,10000,0,0,5000000,0
+2348,customer name 4,10.100.48.91,150000,10000,0,0,5000000,0
+2348,customer name 4,10.100.48.92,250000,10000,0,0,5000000,0
+2348,customer name 4,10.100.48.93,350000,10000,0,0,5000000,0
