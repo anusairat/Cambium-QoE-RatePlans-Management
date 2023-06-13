@@ -7,6 +7,7 @@ import os
 import sys
 import argparse
 from optparse import OptionParser
+import csv
 
 
 
@@ -23,7 +24,6 @@ QoE_MNG_IP = "10.0.0.100"
 QoE_REST_PORT = "3443"
 QoE_REST_USER = "qoe-rest-user"
 QoE_REST_PASSWORD = "qoe-rest-passwd"
-
 
 
 ######################################################################
@@ -45,19 +45,63 @@ URL_PREFIX = "https://" + QoE_MNG_IP + ":" + QoE_REST_PORT + REST_API_END_POINT
 def print_stderr(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
-def processPostResponse(response):
-    if("Content-Length" in response.headers and int(response.headers["Content-Length"]) > 0):
-        print(json.dumps(response.json(), indent=4))
-    return response.status_code
 
-def processDeleteResponse(response):
-    if("Content-Length" in response.headers and int(response.headers["Content-Length"]) > 0):
-        print(json.dumps(response.json(), indent=4))
-    return response.status_code
+def print_qoe_access_info():
+    print_stderr("QoE IP Address:       {:s}".format(QoE_MNG_IP))
+    print_stderr("QoE Port:             {:s}".format(QoE_REST_PORT))
+    print_stderr("QoE REST User:        {:s}".format(QoE_REST_USER))
+    print_stderr("QoE REST Password:    {:s}".format(QoE_REST_PASSWORD))
+    
 
-def processGetResponse(response):
-    if("Content-Length" in response.headers and int(response.headers["Content-Length"]) > 0):
-        print(json.dumps(response.json(), indent=4))
+def does_file_exist(fileName):
+
+    if os.path.isfile(fileName) and os.access(fileName, os.R_OK):
+        return True
+    else:
+        return False
+
+
+def read_qoe_rest_access_info(configFileName):
+    global QoE_MNG_IP, QoE_REST_PORT, QoE_REST_USER, QoE_REST_PASSWORD, URL_PREFIX
+
+    if configFileName is None:
+        print_stderr("using default QoE REST access info")
+        print_qoe_access_info()
+        return
+    
+    if does_file_exist(configFileName):
+        # Open the file in read mode
+        with open(configFileName, 'r') as file:
+            # Read all lines and store them in a list
+            lines = file.readlines()
+
+        if len(lines) < 4:
+            print_stderr("{:s} file must have at least 4 lines: \nQoE Managment IP \nREST API Port \nREST API User Name \nREST API Password".format(configFileName))
+            exit()
+        
+        QoE_MNG_IP = lines[0].strip()
+        QoE_REST_PORT = lines[1].strip()
+        QoE_REST_USER = lines[2].strip()
+        QoE_REST_PASSWORD = lines[3].strip()
+
+        if QoE_MNG_IP == "" or QoE_REST_PORT == "" or QoE_REST_USER =="" or QoE_REST_PASSWORD == "":
+            print_stderr("{:s} file must have at least 4 lines: \nQoE Managment IP \nREST API Port \nREST API User Name \nREST API Password".format(configFileName))
+            exit()
+
+        URL_PREFIX = "https://" + QoE_MNG_IP + ":" + QoE_REST_PORT + REST_API_END_POINT
+
+        print_qoe_access_info()
+    else:
+        print_stderr("using default QoE REST access info")
+        print_qoe_access_info()
+
+    
+
+
+def processResponse(response, print_resp=1):
+    if(print_resp == 1):
+        if("Content-Length" in response.headers and int(response.headers["Content-Length"]) > 0):
+            print(json.dumps(response.json(), indent=4))
     return response.status_code
 
 
@@ -90,7 +134,7 @@ def addPolicy(policyName, downlinkRate, uplinkRate, policyId, acm):
 
 
     response = requests.post(URL_PREFIX + 'policies/rate/' + policyName, headers=headers, json=json_data, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
-    if(processPostResponse(response) >= 400):
+    if(processResponse(response) >= 400):
         #print_stderr ("Error adding subscriber rate policy\n")
         return -1
 
@@ -111,7 +155,7 @@ def retrievPolicy(policyName):
     }
     response = requests.get(URL_PREFIX + POLICY_PREFIX + policyName, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
 
-    if(processGetResponse(response) >= 400):
+    if(processResponse(response) >= 400):
         #print_stderr ("Error retrieving rate policy details\n")
         return -1
     else:
@@ -125,7 +169,7 @@ def deletePolicyByName(policyName):
     }
     print_stderr("Deleting Policy: ", policyName)
     response = requests.delete(URL_PREFIX + 'policies/rate/' + policyName, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
-    if(processDeleteResponse(response) >= 400):
+    if(processResponse(response) >= 400):
         #print("Error deleting policy\n")
         return -1
     return 0
@@ -141,32 +185,55 @@ def deletePolicyById(policyId):
 
     print_stderr("Deleting Policies with Id: ", policyId)
     response = requests.delete(URL_PREFIX + 'policies/rate/', params=params, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
-    if(processDeleteResponse(response) >= 400):
+    if(processResponse(response) >= 400):
         #print_stderr("Error deleting policies with Id  %s\n" %policyId)
         return -1
     return 0
 
 
-def assignSubscriberToRatePolicy(subscriber, subscriberId, policyName):
+def assignSubscriberToRatePolicy(subscriber, subscriberId, policyName, qoutaEnabled, qouta_details):
     #### Assign Subscriber to a policy
     print_stderr('Adding policy {:s} for subscriber {:s}'.format(policyName, subscriber))
     headers = {
         # Already added when you pass json=
         # 'Content-Type': 'application/json',
     }
+    
+    
     json_data = {
         'policyRate': policyName,
         'subscriberId': subscriberId,
     }
-    response = requests.post(URL_PREFIX + 'subscribers/' + subscriber, headers=headers, json=json_data, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
-    if(processPostResponse(response) >= 400):
+
+    quota_dict = {}
+    if qoutaEnabled:
+        if(qouta_details[0] > 0):
+            quota_dict['time'] = qouta_details[0]
+        if(qouta_details[2] > 0 ): # if volume is present it overwites volumeIncrement, so check volumeIncrement first, if it is > 0 then ignore the volume field.
+                                    # user is trying to increase the qouta by the volumeIncrement value.
+            quota_dict['volumeIncrement'] = qouta_details[2]
+        elif(qouta_details[1] > 0):
+            quota_dict['volume'] = qouta_details[1]
+        
+        json_data['quota'] = quota_dict
+    
+    if(retrieveSubscriberRatePolicy(subscriber, 0) == -1):  # subscriber does not exist .. use POST method
+        response = requests.post(URL_PREFIX + 'subscribers/' + subscriber, headers=headers, json=json_data, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
+    else:  # subscriber exists .. use PUT method
+        response = requests.put(URL_PREFIX + 'subscribers/' + subscriber, headers=headers, json=json_data, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
+
+    if(processResponse(response) >= 400):
         #print_stderr("Error assiging Policy to the subscriber\n")
+        # json_resp = response.json()
+        # print_stderr("Response Code ==> " + str(json_resp["error"]["code"]))
+        # print_stderr("Response subCode ==> " + str(json_resp["error"]["subCode"]))
+        # print_stderr("Response message ==> " + str(json_resp["error"]["message"]))
         return -1
 
     return 0
 
 
-def retrieveSubscriberRatePolicy(subscriber):
+def retrieveSubscriberRatePolicy(subscriber, print_resp = 1):
 
     #### Show subscriber(s) (with the associated policy)
     SUBSCRIBER_PREFIX = 'subscribers'
@@ -182,7 +249,7 @@ def retrieveSubscriberRatePolicy(subscriber):
     }
 
     response = requests.get(URL_PREFIX + SUBSCRIBER_PREFIX + subscriber, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
-    if(processGetResponse(response) >= 400):
+    if(processResponse(response, print_resp) >= 400):
         print_stderr("Error retrieving subscriber rate policy\n")
         return -1
 
@@ -197,7 +264,7 @@ def deleteSubscriberRatePolicy(subscriber):
     }
     print_stderr('Deleting policy for subscriber {:s}'.format(subscriber))
     response = requests.delete(URL_PREFIX + 'subscribers/' + subscriber, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
-    if(processDeleteResponse(response) >= 400):
+    if(processResponse(response) >= 400):
         #print_stderr("Error deleting subscriber rate policy\n")
         return -1
 
@@ -216,7 +283,7 @@ def deleteSubscriberRatePolicyBySubID(subscriberId):
 
     print_stderr('Deleting policy for subscriberId {:s}'.format(subscriberId))
     response = requests.delete(URL_PREFIX + 'subscribers', headers=headers, params=params, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
-    if(processDeleteResponse(response) >= 400):
+    if(processResponse(response) >= 400):
         #print_stderr("Error deleting subscriber rate policy\n")
         return -1
 
@@ -236,7 +303,7 @@ def retrievSubscriberMetrics(subscriber, metric, interval, period):
     }
 
     response = requests.get(URL_PREFIX + 'subscribers/' + subscriber +'/' + metric, params=params, headers=headers, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
-    if(processGetResponse(response) >= 400):
+    if(processResponse(response) >= 400):
         #print_stderr("Error retrieving subscriber metrics\n")
         return -1
 
@@ -358,7 +425,9 @@ def setSubRatePolicyFromCLI(args):
     if args.subscriberId is None:
         args.subscriberId = ""
 
-    return assignSubscriberToRatePolicy(args.subscriber, args.subscriberId, args.policyName)
+    noQouta = []
+
+    return assignSubscriberToRatePolicy(args.subscriber, args.subscriberId, args.policyName, 0, noQouta)
 
 ######################################
 ##### Retrieving Subscriber's Policy
@@ -437,6 +506,133 @@ def getSubMetricsFromCLI(args):
     return retrievSubscriberMetrics(args.subscriber, args.metric, args.metric_interval, args.metric_period)
 
 
+
+
+######################################
+##### Configure Sub Rate Plans From File
+######################################
+
+def read_subs_plans(subsFile):
+
+    with open(subsFile, 'r') as csvfile:
+        csvreader = csv.reader(csvfile, delimiter=',')
+        header = next(csvreader)
+        rows = []
+        for row in csvreader:
+            rows.append(row)
+        return rows
+
+
+def find_all_rate_plans(subsRates):
+
+    ratePlans = []
+    tempRatePlans = []
+    ratesIndex = 0
+    subsRatePlansIndices = []
+    if len(subsRates) > 0:
+        for i in range(len(subsRates)):
+            dl_rate_Mbps = int(subsRates[i][3])/1000
+            ul_rate_Mbps = int(subsRates[i][4])/1000
+
+            if(dl_rate_Mbps - int(dl_rate_Mbps) == 0):
+                dl_rate_Mbps = int(dl_rate_Mbps)
+
+            if(ul_rate_Mbps - int(ul_rate_Mbps) == 0):
+                ul_rate_Mbps = int(ul_rate_Mbps)
+            
+            ratePlanName = str(dl_rate_Mbps) + "_" + str(ul_rate_Mbps) + "M"
+            
+            if not(ratePlanName in tempRatePlans):
+                ratePlans.append([dl_rate_Mbps, ul_rate_Mbps, ratePlanName] )
+                tempRatePlans.append(ratePlanName)
+                subsRatePlansIndices.append(ratesIndex)
+                ratesIndex += 1
+            else:
+                subsRatePlansIndices.append(tempRatePlans.index(ratePlanName))
+
+    return ratePlans, subsRatePlansIndices
+
+
+def addUpdatePolicies(ratePlans, acm):
+    print("Updating rate plans\n")
+
+    for i in range(len(ratePlans)):
+        rates = ratePlans[i]
+
+        rateDL = int(rates[0] * 1000)  # Plans are in Mbps, QoE accepts kbps
+        rateUL = int(rates[1] * 1000)  # Plans are in Mbps, QoE accepts kbps
+        policyName = rates[2] 
+        policyId = policyName
+
+        addPolicy(policyName, rateDL, rateUL, policyId, acm)
+
+
+def assignRatePlansToSubscribers(subsRates, ratePlans, subsRatePlanIndices):
+    print("Assigning Subscribers to rate plans\n")
+    qoutaDetails = []
+    for i in range(len(subsRates)):
+        qoutaDetails = [0,0,0]
+        policyName = ratePlans[subsRatePlanIndices[i]][2] 
+        subscriber = subsRates[i][2]
+        if(subsRates[i][0].strip() == "" and subsRates[i][1].strip() == "" ): # Both Customer Number & Name are empty
+            subscriberIdTxt = subscriber  # set subscriberID as the subscriber IP
+        elif (subsRates[i][0].strip() == "" and subsRates[i][1].strip() != "" ): # Customer Number is empty
+            subscriberIdTxt = subsRates[i][1] # set ID as Customer Name
+        elif(subsRates[i][0].strip() != "" and subsRates[i][1].strip() == "" ): # Customer Name is empty
+            subscriberIdTxt = subsRates[i][0] # set ID as Customer Number
+        else: # Both Customer Number & Name are not empty
+            subscriberIdTxt = subsRates[i][0]+"-"+subsRates[i][1]  # Set SubscriberId as CustomerNumber_CustomerName
+
+        subscriberIdTxt = subscriberIdTxt.replace(" ", "_")
+
+        qoutaEnabled = int(subsRates[i][5])
+        if qoutaEnabled > 0:
+            qoutaDetails[0] = int(subsRates[i][6]) # int(time.time())+(10*365*24*60*60)
+            quota_exp_time = int(subsRates[i][6]) # int(time.time())+(10*365*24*60*60)
+
+            qoutaDetails[1] = int(subsRates[i][7]) # Qouta Volume KB
+            quota_kB = int(subsRates[i][7])  # Qouta Volume KB
+
+            qoutaDetails[2] = int(subsRates[i][8]) # Qouta Volume Increment KB
+            quota_inc_kB = int(subsRates[i][8]) # Qouta Volume Increment KB
+
+        assignSubscriberToRatePolicy(subscriber, subscriberIdTxt, policyName, qoutaEnabled, qoutaDetails) # quota_exp_time, quota_kB, quota_inc_kB)
+
+
+def displaygetloadSubRatePlansFromFileUsage():
+    print_stderr("\nUsage:")
+    print_stderr(os.path.basename(__file__) + " loadSubsFromFile -f [File Name] [-acm [true|false]]")
+    print_stderr("")
+
+def loadSubRatePlansFromFile(args):
+
+    print_stderr("Getting subscriber metrics through CLI")
+    #print_stderr(args)
+    if args.subs_rate_plans_file is None:
+        print_stderr("Missing subscribers rate plans file")
+        displaygetloadSubRatePlansFromFileUsage()
+        return -1
+    
+    if does_file_exist(str(args.subs_rate_plans_file)) == False:
+        print ("\n\nERROR ==> File [", str(args.subs_rate_plans_file ), "] does not exist")
+        displaygetloadSubRatePlansFromFileUsage()
+        return(-1)
+    
+    acm = False
+    if args.acm is None:
+        acm = False
+    elif args.acm.lower() == "true":
+        acm = True
+    elif args.acm.lower() == "false":
+        acm = False
+
+    subsRates = read_subs_plans(args.subs_rate_plans_file)
+    ratePlans, subsRatePlanIndices = find_all_rate_plans(subsRates)
+    addUpdatePolicies(ratePlans, acm)
+    assignRatePlansToSubscribers(subsRates, ratePlans, subsRatePlanIndices)
+
+
+
 ######################################################################
 ################                                        ##############
 ################                main()                  ##############
@@ -447,7 +643,7 @@ def getSubMetricsFromCLI(args):
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", help="Action to be performed: addPolicy|getPolicy|deletePolicy|setSubRatePolicy|getSubRatePolicy|deleteSubRatePolicy|getSubMetrics")
+    parser.add_argument("action", help="Action to be performed: addPolicy|getPolicy|deletePolicy|setSubRatePolicy|getSubRatePolicy|deleteSubRatePolicy|getSubMetrics|loadSubsFromFile")
     parser.add_argument("-p", "--policyName", help="Policy Name, no spaces or special characters")
     parser.add_argument("-pi", "--policyId", help="Policy Identifier, no spaces or special characters")
     parser.add_argument("-dl", "--downlinkRate", type=int, help="Downlink rate in kbps")
@@ -458,8 +654,13 @@ def main():
     parser.add_argument("-m", "--metric", help="subscriber metric to retrieve: bandwidth|flows|latency|retransmission|volume")
     parser.add_argument("-mi", "--metric_interval", type=int, help="subscriber metric time interval in minutes (default 60 minutes)")
     parser.add_argument("-mp", "--metric_period", type=int, help="subscriber metric ime period in hours (default: 24 hours). The maximum query period is 3 months")
+    parser.add_argument("-f", "--subs_rate_plans_file", help="subscriber rate plans file name")
+    parser.add_argument("-cfg", "--qoe_access_config_file", help="QoE REST Configuration file name")
+    
 
     args = parser.parse_args()
+
+    read_qoe_rest_access_info(args.qoe_access_config_file)
 
     match args.action.lower():
         case "addpolicy":
@@ -476,8 +677,11 @@ def main():
             return deleteSubRatePolicyFromCLI(args)
         case "getsubmetrics":
             return getSubMetricsFromCLI(args)
+        case "loadsubsfromfile":
+            return loadSubRatePlansFromFile(args)
         case default:
             print_stderr("ERROR:: Unknow action ==> ", args.action)
+            print_stderr("Supported actions ==> ", "addPolicy | getPolicy | deletePolicy | setSubRatePolicy | getSubRatePolicy | deleteSubRatePolicy | getSubMetrics | loadSubsFromFile")
             parser.print_help()
             return -1
 
