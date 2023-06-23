@@ -104,10 +104,24 @@ def processResponse(response, print_resp=1):
             print(json.dumps(response.json(), indent=4))
     return response.status_code
 
+def standarizePolicyName(policyName):
+    policyName = policyName.replace(' ', '-')
+    policyName = policyName.replace('/', '_')
+    policyName = policyName.replace('\\', '_')
+
+    return policyName
+
 
 def addPolicy(policyName, downlinkRate, uplinkRate, policyId, acm):
     #### Add new Policy
-    print_stderr("Adding new Policy ==>  Name: {:s} Id: {:s} DL Rate(kbps): {:d} UL Rate (kbps): {:d}  ACM: {:s}".format(policyName, policyId, downlinkRate, uplinkRate, str(acm)))
+
+    policyName = standarizePolicyName(policyName)
+
+    downlinkRate = int(downlinkRate) # remove fraction from rate
+    uplinkRate = int(uplinkRate) # remove fraction from rate
+
+    #### Add new Policy
+    print_stderr(f"Adding new Policy ==>  Name: [{policyName}], Id: [{policyId}], DL Rate(kbps): [{downlinkRate}], UL Rate (kbps): [{uplinkRate}],  ACM: {acm}")
     headers = {
         # Already added when you pass json= but not when you pass data=
         # 'Content-Type': 'application/json',
@@ -119,7 +133,7 @@ def addPolicy(policyName, downlinkRate, uplinkRate, policyId, acm):
 
     if(downlinkRate > 0):
         json_data['rateLimitDownlink'] = {
-            'rate': downlinkRate,
+            'rate': int(downlinkRate),
             'congestionMgmt': acm,
         }
     else:
@@ -129,7 +143,7 @@ def addPolicy(policyName, downlinkRate, uplinkRate, policyId, acm):
 
     if(uplinkRate > 0):
         json_data['rateLimitUplink'] = {
-            'rate': uplinkRate,
+            'rate': int(uplinkRate),
         }
 
 
@@ -191,7 +205,7 @@ def deletePolicyById(policyId):
     return 0
 
 
-def assignSubscriberToRatePolicy(subscriber, subscriberId, policyName, qoutaEnabled, qouta_details):
+def assignSubscriberToRatePolicy(subscriber, subscriberId, policyName, qoutaEnabled=False, qouta_details=None):
     #### Assign Subscriber to a policy
     print_stderr('Adding policy {:s} for subscriber {:s}'.format(policyName, subscriber))
     headers = {
@@ -354,17 +368,10 @@ def addPolicyFromCLI(args):
         args.uplinkRate = -1
 
 
-    acm = False
-    if args.acm is None:
-        acm = False
-    elif args.acm.lower() == "true":
-        acm = True
-    elif args.acm.lower() == "false":
-        acm = False
-    else:
-        print("Wrong ACM switch value")
-        displayAddPolicyUsage()
-        return -1
+    acm = True
+    if args.acm is not None:
+        if args.acm.lower() == "false":
+            acm = False
 
 
     return addPolicy(args.policyName, args.downlinkRate, args.uplinkRate, args.policyId, acm)
@@ -426,8 +433,8 @@ def setSubRatePolicyFromCLI(args):
         args.subscriberId = ""
 
     noQouta = []
-
-    return assignSubscriberToRatePolicy(args.subscriber, args.subscriberId, args.policyName, 0, noQouta)
+    policyName = standarizePolicyName(args.policyName)
+    return assignSubscriberToRatePolicy(args.subscriber, args.subscriberId, policyName, 0, noQouta)
 
 ######################################
 ##### Retrieving Subscriber's Policy
@@ -553,8 +560,8 @@ def find_all_rate_plans(subsRates):
     return ratePlans, subsRatePlansIndices
 
 
-def addUpdatePolicies(ratePlans, acm):
-    print("Updating rate plans\n")
+def addUpdatePoliciesFromFile(ratePlans, acm):
+    print_stderr("Updating rate plans from file\n")
 
     for i in range(len(ratePlans)):
         rates = ratePlans[i]
@@ -568,7 +575,7 @@ def addUpdatePolicies(ratePlans, acm):
 
 
 def assignRatePlansToSubscribers(subsRates, ratePlans, subsRatePlanIndices):
-    print("Assigning Subscribers to rate plans\n")
+    print_stderr("Assigning Subscribers to rate plans from file\n")
     qoutaDetails = []
     for i in range(len(subsRates)):
         qoutaDetails = [0,0,0]
@@ -596,12 +603,13 @@ def assignRatePlansToSubscribers(subsRates, ratePlans, subsRatePlanIndices):
             qoutaDetails[2] = int(subsRates[i][8]) # Qouta Volume Increment KB
             quota_inc_kB = int(subsRates[i][8]) # Qouta Volume Increment KB
 
+        policyName = standarizePolicyName(policyName)
         assignSubscriberToRatePolicy(subscriber, subscriberIdTxt, policyName, qoutaEnabled, qoutaDetails) # quota_exp_time, quota_kB, quota_inc_kB)
 
 
 def displaygetloadSubRatePlansFromFileUsage():
     print_stderr("\nUsage:")
-    print_stderr(os.path.basename(__file__) + " loadSubsFromFile -f [File Name] [-acm [true|false]]")
+    print_stderr(os.path.basename(__file__) + " loadSubsFromFile -f [File Name] [-acm [true|false]] [cfg [qoe access configuration file name]]")
     print_stderr("")
 
 def loadSubRatePlansFromFile(args):
@@ -614,21 +622,18 @@ def loadSubRatePlansFromFile(args):
         return -1
     
     if does_file_exist(str(args.subs_rate_plans_file)) == False:
-        print ("\n\nERROR ==> File [", str(args.subs_rate_plans_file ), "] does not exist")
+        print_stderr ("\n\nERROR ==> File [", str(args.subs_rate_plans_file ), "] does not exist")
         displaygetloadSubRatePlansFromFileUsage()
         return(-1)
     
-    acm = False
-    if args.acm is None:
-        acm = False
-    elif args.acm.lower() == "true":
-        acm = True
-    elif args.acm.lower() == "false":
-        acm = False
+    acm = True # Defatul ACM is ON
+    if args.acm is not None:
+        if args.acm.lower() == "false":
+            acm = False
 
     subsRates = read_subs_plans(args.subs_rate_plans_file)
     ratePlans, subsRatePlanIndices = find_all_rate_plans(subsRates)
-    addUpdatePolicies(ratePlans, acm)
+    addUpdatePoliciesFromFile(ratePlans, acm)
     assignRatePlansToSubscribers(subsRates, ratePlans, subsRatePlanIndices)
 
 
