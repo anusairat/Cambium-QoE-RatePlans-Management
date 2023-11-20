@@ -1,11 +1,19 @@
-Customer_Number, Customer_Name, IPv4_Address, Download_Rate_Kbps, Upload_Rate_Kbps, Qouta_Enabled, Quota_Time_Expirey, Quota_kB, Quota_Increment_kB
-2345,customer name 1,10.100.48.6,50000,10000,1,0,10000000,0
-2346,customer name 2,10.100.48.7,10000,2000,0,0,20000000,0
-2347,customer name 3,10.100.48.8,20000,4000,0,0,15000000,0
-2347,customer name 3,10.100.48.81,120000,4000,0,0,15000000,0
-2347,customer name 3,10.100.48.82,220000,4000,0,0,15000000,0
-2347,customer name 3,10.100.48.83,320000,4000,0,0,15000000,0
-2348,customer name 4,10.100.48.9,50000,10000,0,0,5000000,0
-2348,customer name 4,10.100.48.91,150000,10000,0,0,5000000,0
-2348,customer name 4,10.100.48.92,250000,10000,0,0,5000000,0
-2348,customer name 4,10.100.48.93,350000,10000,0,0,5000000,0
+Cust_Number, Cust_Name, IPv4_Address, DL_Spd_Kbps, UL_Spd_Kbps, Quota,Subscriber_groups
+2345,customer name 1,10.100.48.6,50000,10000,2023-12-30:0:60000000:0,AP1:Tower1:City1:Center1
+2346,customer name 2,10.100.48.7,10000,2000,,AP1:Tower1:City1:Center1
+2347,customer name 3,10.100.48.8,20000,4000,2023-12-25:0:60000000:0,AP1:Tower1:City1:Center1
+2348,customer name 4,10.100.48.9,120000,4000,,AP2:Tower2:City1:Center1
+2349,customer name 5,10.100.48.10,220000,4000,2023-12-17:0:60000000:0,AP2:Tower2:City1:Center1
+2350,customer name 6,10.100.48.11,320000,4000,2023-12-13:0:60000000:0,AP3:Tower3:City2:Center2
+2351,customer name 7,10.100.48.12,50000,10000,2023-12-20:0:60000000:0,AP3:Tower3:City2:Center2
+2352,customer name 8,10.100.48.13,150000,10000,2023-12-20:0:60000000:0,AP3:Tower3:City2:Center2
+2353,customer name 9,10.100.48.14,250000,10000,2023-12-20:0:60000000:0,AP4:Tower4:City3:Center3
+2354,customer name 10,10.100.48.15,350000,10000,2023-12-20:0:60000000:0,
+2355,customer name 11,10.100.48.16,250000,10000,2023-12-20:0:60000000:0,AP4:Tower4:City3:Center3
+2356,customer name 12,10.100.48.17,350000,10000,,AP4:Tower4:City3:Center3
+2357,customer name 13,10.100.48.18,250000,10000,2023-12-20:0:60000000:0,AP3:Tower3:City2:Center2
+2358,customer name 14,10.100.48.19,350000,10000,2023-12-20:0:60000000:0,AP3:Tower3:City2:Center2
+2359,customer name 15,10.100.48.20,250000,10000,2023-12-20:0:60000000:0,AP2:Tower2:City1:Center1
+2360,customer name 16,10.100.48.21,350000,10000,2023-12-20:0:60000000:0,AP2:Tower2:City1:Center1
+2361,customer name 17,10.100.48.22,250000,10000,2023-12-20:0:60000000:0,AP4:Tower4:City3:Center3
+2362,customer name 18,10.100.48.22,350000,10000,0:0:0:0,AP4:Tower4:City3:Center3
