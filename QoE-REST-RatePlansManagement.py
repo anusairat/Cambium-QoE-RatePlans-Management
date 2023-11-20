@@ -8,11 +8,16 @@ import sys
 import argparse
 from optparse import OptionParser
 import csv
-
-
+import re
+from datetime import datetime, timezone
+import pytz
 
 ## Supress HTTPS Insecure Request warning
 requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+
+# Define a regular expression pattern to match numbers -- for DL & UL Rate extraction from plan name
+service_name_pattern = r'(\d+)-(\d+)'
+
 
 ######################################################################
 ################                                        ##############
@@ -25,6 +30,9 @@ QoE_REST_PORT = "3443"
 QoE_REST_USER = "qoe-rest-user"
 QoE_REST_PASSWORD = "qoe-rest-passwd"
 
+
+DL_RATE_MULTIPLIER = 1.0
+UL_RATE_MULTIPLIER = 1.0
 
 ######################################################################
 ################                                        ##############
@@ -43,7 +51,8 @@ URL_PREFIX = "https://" + QoE_MNG_IP + ":" + QoE_REST_PORT + REST_API_END_POINT
 ######################################################################
 
 def print_stderr(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
+#    print(*args, file=sys.stderr, **kwargs)
+    print(*args, **kwargs)
 
 
 def print_qoe_access_info():
@@ -101,24 +110,48 @@ def read_qoe_rest_access_info(configFileName):
 def processResponse(response, print_resp=1):
     if(print_resp == 1):
         if("Content-Length" in response.headers and int(response.headers["Content-Length"]) > 0):
-            print(json.dumps(response.json(), indent=4))
+            print_stderr(json.dumps(response.json(), indent=4))
     return response.status_code
 
-def standarizePolicyName(policyName):
-    policyName = policyName.replace(' ', '-')
-    policyName = policyName.replace('/', '_')
-    policyName = policyName.replace('\\', '_')
 
-    return policyName
+def standarizeName(Name):
+    Name = Name.strip()
+    Name = Name.replace(' ', '-')
+    Name = Name.replace('/', '_')
+    Name = Name.replace('\\', '_')
+    Name = Name.replace('+', '_')
+    Name = Name.replace(';', '_')
+    Name = Name.replace(',', '_')
+    Name = Name.replace(':', '_')
+    Name = Name.replace('@', '_')
+    Name = Name.replace('#', '_')
+    Name = Name.replace('$', '_')
+    Name = Name.replace('%', '_')
+    Name = Name.replace('!', '_')
+    Name = Name.replace('~', '_')
+    Name = Name.replace('&', '_')
+    Name = Name.replace('^', '_')
+    Name = Name.replace('"', '_')
+    Name = Name.replace('\'', '_')
+    Name = Name.replace('*', '_')
+    
+    return Name
 
 
 def addPolicy(policyName, downlinkRate, uplinkRate, policyId, acm):
     #### Add new Policy
 
-    policyName = standarizePolicyName(policyName)
+    policyName = standarizeName(policyName)
+    
+    if downlinkRate is not None:
+        downlinkRate = int(downlinkRate) # remove fraction from rate
+    else:
+        downlinkRate = -1
 
-    downlinkRate = int(downlinkRate) # remove fraction from rate
-    uplinkRate = int(uplinkRate) # remove fraction from rate
+    if uplinkRate is not None:
+        uplinkRate = int(uplinkRate) # remove fraction from rate
+    else:
+        uplinkRate = -1
 
     #### Add new Policy
     print_stderr(f"Adding new Policy ==>  Name: [{policyName}], Id: [{policyId}], DL Rate(kbps): [{downlinkRate}], UL Rate (kbps): [{uplinkRate}],  ACM: {acm}")
@@ -205,12 +238,21 @@ def deletePolicyById(policyId):
     return 0
 
 
-def assignSubscriberToRatePolicy(subscriber, subscriberId, policyName, qoutaEnabled=False, qouta_details=None):
+def assignSubscriberToRatePolicy(subscriberRecord, newSub = True):
     #### Assign Subscriber to a policy
-    print_stderr('Adding policy {:s} for subscriber {:s}'.format(policyName, subscriber))
+
+    subscriber = subscriberRecord['subscriberIp']
+    subscriberId = subscriberRecord['subscriberId']
+    policyName = subscriberRecord['policyName']
+    subscriberGroups = subscriberRecord['subscriberGroups']
+    quota_details = subscriberRecord["quotaDetails"]
+    
+
+    print_stderr(f'Adding policy {policyName} for subscriber {subscriber}')
     headers = {
         # Already added when you pass json=
-        # 'Content-Type': 'application/json',
+        'Content-Type': 'application/json',
+        "Accept-Charset": "UTF-8"
     }
     
     
@@ -220,28 +262,34 @@ def assignSubscriberToRatePolicy(subscriber, subscriberId, policyName, qoutaEnab
     }
 
     quota_dict = {}
-    if qoutaEnabled:
-        if(qouta_details[0] > 0):
-            quota_dict['time'] = qouta_details[0]
-        if(qouta_details[2] > 0 ): # if volume is present it overwites volumeIncrement, so check volumeIncrement first, if it is > 0 then ignore the volume field.
-                                    # user is trying to increase the qouta by the volumeIncrement value.
-            quota_dict['volumeIncrement'] = qouta_details[2]
-        elif(qouta_details[1] > 0):
-            quota_dict['volume'] = qouta_details[1]
+
+    if quota_details is not None:
+        quota_enabled = False
         
-        json_data['quota'] = quota_dict
-    
-    if(retrieveSubscriberRatePolicy(subscriber, 0) == -1):  # subscriber does not exist .. use POST method
+        if(quota_details[0] > 0):
+            quota_dict['time'] = quota_details[0]
+            quota_enabled = True
+        if(quota_details[2] > 0 ): # if volume is present it overwites volumeIncrement, so check volumeIncrement first, if it is > 0 then ignore the volume field.
+                                    # user is trying to increase the quota by the volumeIncrement value.
+            quota_dict['volumeIncrement'] = quota_details[2]
+            quota_enabled = True
+        elif(quota_details[1] > 0):
+            quota_dict['volume'] = quota_details[1]
+            quota_enabled = True
+
+        if quota_enabled:
+            json_data['quota'] = quota_dict
+
+    if subscriberGroups is not None and len(subscriberGroups) > 0:
+        json_data['subscriberGroups'] = subscriberGroups
+
+    if newSub:
+        # subscriber does not exist .. use POST method
         response = requests.post(URL_PREFIX + 'subscribers/' + subscriber, headers=headers, json=json_data, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
     else:  # subscriber exists .. use PUT method
         response = requests.put(URL_PREFIX + 'subscribers/' + subscriber, headers=headers, json=json_data, verify=False, auth=(QoE_REST_USER, QoE_REST_PASSWORD))
 
     if(processResponse(response) >= 400):
-        #print_stderr("Error assiging Policy to the subscriber\n")
-        # json_resp = response.json()
-        # print_stderr("Response Code ==> " + str(json_resp["error"]["code"]))
-        # print_stderr("Response subCode ==> " + str(json_resp["error"]["subCode"]))
-        # print_stderr("Response message ==> " + str(json_resp["error"]["message"]))
         return -1
 
     return 0
@@ -414,8 +462,96 @@ def deletePolicyFromCLI(args):
 ######################################
 def displaySetSubRatePolicyUsage():
     print_stderr("\nUsage:")
-    print_stderr(os.path.basename(__file__) + " setSubRatePolicy --subscriber [IPv4] --subscriberId [ID] --policyName [policyname]")
+    errorTxt =" setSubRatePolicy --subscriber [IPv4] --subscriberId [ID] --policyName [policyname] -qt [Quota Details] -grps [Subscriber Groups]\n\n"
+    errorTxt += " -qt [':' separated numbers formatted as ExpirationDate:ExpirationTime:Volume(kBytes):VolumeIncrement(kBytes). e.g. 2023-12-30:23-30:90000000:0 for 90GB quota expiring on Dec 30th 2023 at 11:30 PM]\n"
+    errorTxt += "\t\tExpirationDate format: YYYY-MM-DD  or 0 for no expiration date\n"
+    errorTxt += "\t\tExpirationTime format: HH-MM or 0 for no expiration time. Set to 0 if no expiration date\n"
+    errorTxt += " -grps [':' separated groups names up to 8 groups ':' separated e.g. AP1NorthWest:Site1Noth:'Tower1 North West']\n"
+    errorTxt += "\t\t use '' for group name that includes spaces. \n"
+    errorTxt += "\t\t ':' can not be part of a group name'.\n"
+    errorTxt += "\n Optional parameters: --subscriberId, -qt and -grps"
+    
+    print_stderr(os.path.basename(__file__) + errorTxt)
     print_stderr("")
+ 
+def is_valid_date(date_string):
+    try:
+        # Attempt to parse the string as a date
+        datetime.strptime(date_string, "%Y-%m-%d")
+        return True
+    except ValueError:
+        # If parsing fails, it's not a valid date
+        return False
+
+def convertExpirationDateTimetoUTC(quota_expir_date, quota_expir_time):
+    utc_exp_time = 0
+
+    if quota_expir_date is None :
+        return 0
+    
+    if not is_valid_date(quota_expir_date):
+        return 0
+
+    if quota_expir_time is None or quota_expir_time == "":
+        quota_expir_time = "00-00"
+
+    #if str(quota_expir_date) != "0":
+
+    expiration_time = quota_expir_time.split("-")
+    if len(expiration_time) < 2:
+        expiration_str = quota_expir_date + " " + "00:00"
+    else:
+        expiration_str = quota_expir_date + " " + expiration_time[0] +":"+expiration_time[1]
+
+    expiration_datetime = datetime.strptime(expiration_str, "%Y-%m-%d %H:%M")
+
+    local_timezone = datetime.now(timezone.utc).astimezone().tzinfo
+    local_exp_datetime = expiration_datetime.replace(tzinfo=local_timezone)
+    
+    utc_timezone = pytz.utc
+    utc_exp_datetime = local_exp_datetime.astimezone(utc_timezone)
+
+    utc_exp_time = int(utc_exp_datetime.timestamp())
+
+    return utc_exp_time
+ 
+def process_quota_values(sub_quota):
+    quotaDetails = None
+    newSubscriber = True
+
+    quota_values = sub_quota.split(":")
+    if len(quota_values) == 4:
+
+        quota_expir_date = quota_values[0]
+        quota_expir_time = quota_values[1]
+        quota_volume = int(quota_values[2])
+        quota_volume_increment = int(quota_values[3])
+
+
+        quota_expiration_utc = convertExpirationDateTimetoUTC(quota_expir_date, quota_expir_time)
+
+        quotaDetails = [quota_expiration_utc, quota_volume, quota_volume_increment]
+
+        if quota_volume_increment > 0: 
+            newSubscriber = False
+    else:
+        return -1
+    
+    return 1, quotaDetails, newSubscriber
+
+def process_subscriber_groups(sub_groups):
+    subscriberParentSites = None
+    groups = sub_groups.split(":")
+    if len(groups) > 0:
+        subscriberParentSites = []
+        for group in groups:
+            group = standarizeName(group)
+            if group not in subscriberParentSites:
+                subscriberParentSites.append(group)
+    else:
+        return -1
+
+    return 1, subscriberParentSites
 
 def setSubRatePolicyFromCLI(args):
     print_stderr("Assigning Subscriber to Policy through CLI")
@@ -430,11 +566,44 @@ def setSubRatePolicyFromCLI(args):
         return -1
 
     if args.subscriberId is None:
-        args.subscriberId = ""
+        subscriberIdTxt = args.subscriber
+    else:
+        subscriberIdTxt = args.subscriberId
 
-    noQouta = []
-    policyName = standarizePolicyName(args.policyName)
-    return assignSubscriberToRatePolicy(args.subscriber, args.subscriberId, policyName, 0, noQouta)
+    subscriberParentSites = None 
+    quotaDetails = None
+    newSubscriber = True
+    ## Process quota info if provided
+    if args.sub_quota_list is not None:
+        sub_quota = args.sub_quota_list
+        status, quotaDetails, newSubscriber = process_quota_values(sub_quota)
+        if status == -1:
+            print_stderr("Missformatted subscriber quota field")
+            displaySetSubRatePolicyUsage()
+            return -1
+
+    ## Process subscriber groups info if provided
+    if args.sub_group_list is not None:
+        sub_groups = args.sub_group_list
+        status, subscriberParentSites = process_subscriber_groups(sub_groups)
+        if status == -1:
+            print_stderr("Missformatted subscriber groups field")
+            displaySetSubRatePolicyUsage()
+            return -1
+
+
+
+    subscriberRecord = []
+
+    policyName = standarizeName(args.policyName)
+    subscriberIdTxt = standarizeName(subscriberIdTxt)
+    subscriberIp = args.subscriber
+    subscriberRecord = {'subscriberIp': subscriberIp, 'subscriberId': subscriberIdTxt, 
+                        'policyName': policyName, 'subscriberGroups': subscriberParentSites,
+                        'quotaDetails': quotaDetails}
+    
+    return assignSubscriberToRatePolicy(subscriberRecord, newSub=newSubscriber)
+
 
 ######################################
 ##### Retrieving Subscriber's Policy
@@ -536,6 +705,7 @@ def find_all_rate_plans(subsRates):
     tempRatePlans = []
     ratesIndex = 0
     subsRatePlansIndices = []
+
     if len(subsRates) > 0:
         for i in range(len(subsRates)):
             dl_rate_Mbps = int(subsRates[i][3])/1000
@@ -551,6 +721,7 @@ def find_all_rate_plans(subsRates):
             
             if not(ratePlanName in tempRatePlans):
                 ratePlans.append([dl_rate_Mbps, ul_rate_Mbps, ratePlanName] )
+
                 tempRatePlans.append(ratePlanName)
                 subsRatePlansIndices.append(ratesIndex)
                 ratesIndex += 1
@@ -560,14 +731,22 @@ def find_all_rate_plans(subsRates):
     return ratePlans, subsRatePlansIndices
 
 
+
 def addUpdatePoliciesFromFile(ratePlans, acm):
     print_stderr("Updating rate plans from file\n")
 
     for i in range(len(ratePlans)):
         rates = ratePlans[i]
+        if rates[0] is not None:
+            rateDL = int(rates[0])  
+        else:
+            rateDL = None
 
-        rateDL = int(rates[0] * 1000)  # Plans are in Mbps, QoE accepts kbps
-        rateUL = int(rates[1] * 1000)  # Plans are in Mbps, QoE accepts kbps
+        if rates[1] is not None:
+            rateUL = int(rates[1])  
+        else:
+            rateUL = None
+
         policyName = rates[2] 
         policyId = policyName
 
@@ -576,35 +755,32 @@ def addUpdatePoliciesFromFile(ratePlans, acm):
 
 def assignRatePlansToSubscribers(subsRates, ratePlans, subsRatePlanIndices):
     print_stderr("Assigning Subscribers to rate plans from file\n")
-    qoutaDetails = []
+    quotaDetails = []
     for i in range(len(subsRates)):
-        qoutaDetails = [0,0,0]
+        subscriberRecord = []
         policyName = ratePlans[subsRatePlanIndices[i]][2] 
-        subscriber = subsRates[i][2]
-        if(subsRates[i][0].strip() == "" and subsRates[i][1].strip() == "" ): # Both Customer Number & Name are empty
-            subscriberIdTxt = subscriber  # set subscriberID as the subscriber IP
-        elif (subsRates[i][0].strip() == "" and subsRates[i][1].strip() != "" ): # Customer Number is empty
-            subscriberIdTxt = subsRates[i][1] # set ID as Customer Name
-        elif(subsRates[i][0].strip() != "" and subsRates[i][1].strip() == "" ): # Customer Name is empty
-            subscriberIdTxt = subsRates[i][0] # set ID as Customer Number
-        else: # Both Customer Number & Name are not empty
-            subscriberIdTxt = subsRates[i][0]+"-"+subsRates[i][1]  # Set SubscriberId as CustomerNumber_CustomerName
+        subscriberIp = subsRates[i][2]
+        subscriberId = standarizeName(subsRates[i][0] + "-" + subsRates[i][1])
 
-        subscriberIdTxt = subscriberIdTxt.replace(" ", "_")
+        quotaDetails = None
+        newSubscriber = True
+        if subsRates[i][5] is not None and subsRates[i][5].strip() !="":
+            status, quotaDetails, newSubscriber = process_quota_values(subsRates[i][5])
+            if status == -1:
+                print_stderr("Subscriber with IP ", subscriberIp, " has missformatted quota info ... Skipping subscriber quota")
 
-        qoutaEnabled = int(subsRates[i][5])
-        if qoutaEnabled > 0:
-            qoutaDetails[0] = int(subsRates[i][6]) # int(time.time())+(10*365*24*60*60)
-            quota_exp_time = int(subsRates[i][6]) # int(time.time())+(10*365*24*60*60)
+        subscriberParentSites = None
 
-            qoutaDetails[1] = int(subsRates[i][7]) # Qouta Volume KB
-            quota_kB = int(subsRates[i][7])  # Qouta Volume KB
+        if subsRates[i][6] is not None:
+            status, subscriberParentSites = process_subscriber_groups(subsRates[i][6])
+            if status == -1:
+                print_stderr("Subscriber with IP ", subscriberIp, " has missformatted subscriber group info ... Skipping subscriber groups")
 
-            qoutaDetails[2] = int(subsRates[i][8]) # Qouta Volume Increment KB
-            quota_inc_kB = int(subsRates[i][8]) # Qouta Volume Increment KB
-
-        policyName = standarizePolicyName(policyName)
-        assignSubscriberToRatePolicy(subscriber, subscriberIdTxt, policyName, qoutaEnabled, qoutaDetails) # quota_exp_time, quota_kB, quota_inc_kB)
+        subscriberRecord = {'subscriberIp': subscriberIp, 'subscriberId': subscriberId, 
+                            'policyName': policyName, 'subscriberGroups': subscriberParentSites,
+                            'quotaDetails': quotaDetails}
+        
+        assignSubscriberToRatePolicy(subscriberRecord, newSub=newSubscriber)
 
 
 def displaygetloadSubRatePlansFromFileUsage():
@@ -614,7 +790,7 @@ def displaygetloadSubRatePlansFromFileUsage():
 
 def loadSubRatePlansFromFile(args):
 
-    print_stderr("Getting subscriber metrics through CLI")
+    print_stderr("Reading subscriber rates from file")
     #print_stderr(args)
     if args.subs_rate_plans_file is None:
         print_stderr("Missing subscribers rate plans file")
@@ -661,6 +837,8 @@ def main():
     parser.add_argument("-mp", "--metric_period", type=int, help="subscriber metric ime period in hours (default: 24 hours). The maximum query period is 3 months")
     parser.add_argument("-f", "--subs_rate_plans_file", help="subscriber rate plans file name")
     parser.add_argument("-cfg", "--qoe_access_config_file", help="QoE REST Configuration file name")
+    parser.add_argument("-grps", "--sub_group_list", help="Subscriber group list up to 8 groups ':' separated")
+    parser.add_argument("-qt", "--sub_quota_list", help="Subscriber quota info ':' separated, formatted as ExpirationDate(YYYY-MM-DD):ExpirationTime(HH-MM):Volume(kBytes):VolumeIncrement(kBytes)")
     
 
     args = parser.parse_args()
