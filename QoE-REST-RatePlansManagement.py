@@ -51,8 +51,8 @@ URL_PREFIX = "https://" + QoE_MNG_IP + ":" + QoE_REST_PORT + REST_API_END_POINT
 ######################################################################
 
 def print_stderr(*args, **kwargs):
-#    print(*args, file=sys.stderr, **kwargs)
-    print(*args, **kwargs)
+    print(*args, file=sys.stderr, **kwargs)
+#    print(*args, **kwargs)
 
 
 def print_qoe_access_info():
@@ -110,7 +110,7 @@ def read_qoe_rest_access_info(configFileName):
 def processResponse(response, print_resp=1):
     if(print_resp == 1):
         if("Content-Length" in response.headers and int(response.headers["Content-Length"]) > 0):
-            print_stderr(json.dumps(response.json(), indent=4))
+            print(json.dumps(response.json(), indent=4))
     return response.status_code
 
 
